@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/": {
+      "targetKind": "existing-ui",
+      "projectId": "58b86fbd-c48a-4944-9fe5-f6d275704fe7",
+      "baselineDraftId": "c47d9464-54a9-41e3-ae64-36550f357272",
+      "activeDraftId": "c47d9464-54a9-41e3-ae64-36550f357272",
+      "designSystemPath": ".superdesign/design-system.md",
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        "frontend/src/App.jsx",
+        "frontend/src/styles.css",
+        "frontend/src/main.jsx",
+        "frontend/index.html",
+        "frontend/src/quiz.js"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "0779642f5fc5cb356978765295cf471a2647a6a3a1dd68f311f6c18dab0c3d5d",
+        "frontend/src/App.jsx": "acc42fa01aec37426173e5a14abb760f0d1dcab325d247cec3907963d4cc114d",
+        "frontend/src/styles.css": "9cc1709bfe55149de8711dc13b1ae59c64819e8d1788a65a4d226e341ac5c66d",
+        "frontend/src/main.jsx": "38cc9e15aca811fae9cd8880dc51be1752f8b708e1a4f29b8ffa4ef1de7c5761",
+        "frontend/index.html": "2c2df186fc0827dc2ad9589260a47587293468a14628cc2f7ca4ac8ab797872b",
+        "frontend/src/quiz.js": "ac9ddfe278ea2c7a4f305575b031ba23d7f8dde484a281c74f634e77d63b7d8b"
+      },
+      "drafts": {
+        "c47d9464-54a9-41e3-ae64-36550f357272": {
+          "title": "Spotify Quiz — Neon Listening Session",
+          "visualDirection": "near-black Spotify green, chartreuse, luminous glass quiz card, abstract listening artwork",
+          "currentVersion": 2
+        }
+      },
+      "updatedAt": "2026-09-08T08:45:00.000Z"
+    }
+  }
+}

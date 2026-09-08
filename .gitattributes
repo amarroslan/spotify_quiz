@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Treat generated and dependency files as non-source where applicable.
+package-lock.json linguist-generated
+*.min.js linguist-generated
