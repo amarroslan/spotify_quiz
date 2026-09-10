@@ -54,6 +54,8 @@ export async function saveAccessToken(userId, value, ttlSeconds) { return setJso
 
 export async function getQuizCache(spotifyUserId) { return getJson(`spotify:quiz-data:v1:${spotifyUserId}`); }
 export async function saveQuizCache(spotifyUserId, value, ttlSeconds = 300) { return setJson(`spotify:quiz-data:v1:${spotifyUserId}`, value, ttlSeconds); }
+export async function getLyricsCache(cacheKey) { return getJson(`spotify:lyrics:v1:${cacheKey}`); }
+export async function saveLyricsCache(cacheKey, value, ttlSeconds = 86_400) { return setJson(`spotify:lyrics:v1:${cacheKey}`, value, ttlSeconds); }
 
 export async function upsertUser({ spotifyUserId, displayName, avatarUrl, refreshToken }) {
   const refreshTokenCiphertext = await encryptSecret(refreshToken);

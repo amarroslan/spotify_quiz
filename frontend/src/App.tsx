@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { getQuizData, login, logout, saveQuizAttempt } from './api';
-import { buildQuestions } from './quiz';
+import { buildRound, THEME_OPTIONS } from './quiz';
 import { getInitialTheme, THEME_STORAGE_KEY, toggleTheme, type Theme } from './theme';
 import type { QuizQuestion } from './types/quiz';
+import type { QuizTheme } from './types/quiz';
 import type { QuizData } from './types/spotify';
 
 const signOut = (): Promise<unknown> => logout().catch(() => null).finally(() => window.location.reload());
@@ -15,6 +16,12 @@ function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
   return <button className="theme-toggle" type="button" aria-label={`Switch to ${nextTheme} mode`} aria-pressed={theme === 'light'} onClick={onToggle}><span className="theme-toggle-icon" aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span><span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'}</span></button>;
 }
+
+function ThemePicker({ selectedTheme, onSelect, onStart, theme, onToggleTheme, onSignOut }: { selectedTheme: QuizTheme | null; onSelect: (value: QuizTheme) => void; onStart: () => void; theme: Theme; onToggleTheme: () => void; onSignOut: () => Promise<unknown> }) {
+  return <main className="page-shell theme-picker-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><div className="topbar-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="ghost-button" onClick={onSignOut}>Sign out</button></div></header><section className="theme-picker-intro"><div className="eyebrow"><span /> CHOOSE YOUR FREQUENCY</div><h1>What do you want to <em>remember?</em></h1><p>Pick one lane. We will build five fresh questions from your Spotify signal every round.</p></section><section className="theme-grid" aria-label="Quiz themes">{THEME_OPTIONS.map((option) => <button key={option.id} type="button" className={`theme-card ${selectedTheme === option.id ? 'selected' : ''}`} aria-pressed={selectedTheme === option.id} onClick={() => onSelect(option.id)}><span className="theme-card-icon" aria-hidden="true">{option.icon}</span><span className="theme-card-copy"><strong>{option.label}</strong><small>{option.description}</small></span><span className="theme-card-arrow" aria-hidden="true">-&gt;</span></button>)}</section><div className="theme-picker-footer"><span>{selectedTheme ? 'One theme. Five questions. No repeats until you play again.' : 'Choose a theme to begin.'}</span><button className="spotify-button" disabled={!selectedTheme} onClick={onStart}>Start round <b>-&gt;</b></button></div></main>;
+}
+
+const themeLabel = (theme: QuizTheme): string => THEME_OPTIONS.find((option) => option.id === theme)?.label || 'Your theme';
 
 function ListeningVisual({ imageUrl }: { imageUrl?: string }) {
   return <div className="listening-visual" aria-hidden="true">{imageUrl && <img className="album-art" src={imageUrl} alt="" loading="lazy" decoding="async" />}<span className="color-blob blob-pink" /><span className="color-blob blob-green" /><span className="color-blob blob-yellow" /><span className="color-blob blob-purple" /><span className="record-lines" /><span className="record-center" /><div className="visual-caption"><div><span>ON REPEAT</span><strong>Your recent rotation</strong></div><b className="waveform"><i /><i /><i /><i /><i /><i /><i /></b></div></div>;
@@ -29,8 +36,8 @@ function ScoreRing({ score, total }: { score: number; total: number }) {
   return <div className="score-ring" style={{ '--score': `${percentage * 3.6}deg` } as CSSProperties}><div><strong>{score}</strong><span>/{total}</span></div></div>;
 }
 
-function Result({ score, total, displayName, onRestart, onSignOut, theme, onToggleTheme }: { score: number; total: number; displayName: string; onRestart: () => void; onSignOut: () => Promise<unknown>; theme: Theme; onToggleTheme: () => void }) {
-  return <main className="page-shell result-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><div className="topbar-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="ghost-button" onClick={onSignOut}>Sign out</button></div></header><section className="result-content"><div className="confetti" aria-hidden="true">* . * . * . *</div><p className="eyebrow centered-eyebrow">SESSION COMPLETE</p><h1>{displayName}, that was your <em>frequency.</em></h1><ScoreRing score={score} total={total} /><p className="result-copy">{score >= total * .75 ? 'You know your listening habits really well.' : 'Your soundtrack still has a few surprises left.'}</p><div className="result-actions"><button className="spotify-button" onClick={onRestart}>Play again <b>-&gt;</b></button><button className="ghost-button" onClick={onSignOut}>Disconnect Spotify</button></div></section></main>;
+function Result({ score, total, displayName, activeTheme, onRestart, onChangeTheme, onSignOut, theme, onToggleTheme }: { score: number; total: number; displayName: string; activeTheme: QuizTheme; onRestart: () => void; onChangeTheme: () => void; onSignOut: () => Promise<unknown>; theme: Theme; onToggleTheme: () => void }) {
+  return <main className="page-shell result-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><div className="topbar-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme} /><button className="ghost-button" onClick={onSignOut}>Sign out</button></div></header><section className="result-content"><div className="confetti" aria-hidden="true">* . * . * . *</div><p className="eyebrow centered-eyebrow">SESSION COMPLETE · {themeLabel(activeTheme).toUpperCase()}</p><h1>{displayName}, that was your <em>frequency.</em></h1><ScoreRing score={score} total={total} /><p className="result-copy">{score >= total * .75 ? 'You know your listening habits really well.' : 'Your soundtrack still has a few surprises left.'}</p><div className="result-actions"><button className="spotify-button" onClick={onRestart}>Play again <b>-&gt;</b></button><button className="ghost-button" onClick={onChangeTheme}>Change theme</button></div></section></main>;
 }
 
 const preferredTheme = (): Theme => {
@@ -46,10 +53,12 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [finished, setFinished] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState<QuizTheme | null>(null);
+  const [activeTheme, setActiveTheme] = useState<QuizTheme | null>(null);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [theme, setTheme] = useState<Theme>(preferredTheme);
   const nextButtonRef = useRef<HTMLButtonElement>(null);
   const authError = new URLSearchParams(window.location.search).get('auth_error');
-  const questions = useMemo(() => data ? buildQuestions(data) : [], [data]);
 
   useEffect(() => {
     getQuizData().then(setData).catch((requestError) => {
@@ -60,13 +69,29 @@ function App() {
   useEffect(() => { if (finished && data) void saveQuizAttempt(score, questions.length).catch(() => null); }, [finished]);
   useEffect(() => { document.documentElement.dataset.theme = theme; window.localStorage.setItem(THEME_STORAGE_KEY, theme); }, [theme]);
 
+  const startRound = (nextTheme: QuizTheme = selectedTheme || activeTheme || 'artists') => {
+    if (!data) return;
+    const round = buildRound(data, nextTheme);
+    if (!round.questions.length) { setError('We need a little more listening history for that theme.'); return; }
+    setSelectedTheme(nextTheme);
+    setActiveTheme(nextTheme);
+    setQuestions(round.questions);
+    setQuestionIndex(0);
+    setScore(0);
+    setSelected(null);
+    setFinished(false);
+    setError(null);
+  };
+  const changeTheme = () => { setActiveTheme(null); setQuestions([]); setSelected(null); setFinished(false); setScore(0); };
+
   if (loading) return <main className="page-shell centered-state" role="status" aria-live="polite"><div className="loading-mark"><i /><i /><i /></div><p>Reading your listening signal...</p></main>;
   if (error) return <main className="page-shell centered-state"><p className="error-copy" role="alert">{error}</p><button className="spotify-button" onClick={() => window.location.reload()}>Try again</button></main>;
   if (!data) return <Landing onLogin={login} authError={authError} theme={theme} onToggleTheme={() => setTheme(toggleTheme(theme))} />;
-  if (!questions.length) return <main className="page-shell centered-state"><Brand /><p>We need a little more Spotify listening history to build your quiz.</p><button className="ghost-button" onClick={signOut}>Sign out</button></main>;
+  if (!activeTheme) return <ThemePicker selectedTheme={selectedTheme} onSelect={setSelectedTheme} onStart={() => startRound()} theme={theme} onToggleTheme={() => setTheme(toggleTheme(theme))} onSignOut={signOut} />;
+  if (!questions.length) return <main className="page-shell centered-state"><Brand /><p>We need a little more Spotify listening history to build your quiz.</p><button className="ghost-button" onClick={changeTheme}>Choose another theme</button></main>;
 
   const displayName = data.profile?.display_name || 'listener';
-  if (finished) return <Result score={score} total={questions.length} displayName={displayName} onRestart={() => { setQuestionIndex(0); setScore(0); setSelected(null); setFinished(false); }} onSignOut={signOut} theme={theme} onToggleTheme={() => setTheme(toggleTheme(theme))} />;
+  if (finished) return <Result score={score} total={questions.length} displayName={displayName} activeTheme={activeTheme} onRestart={() => startRound(activeTheme)} onChangeTheme={changeTheme} onSignOut={signOut} theme={theme} onToggleTheme={() => setTheme(toggleTheme(theme))} />;
 
   const question: QuizQuestion = questions[questionIndex];
   const answer = (choice: string) => { if (selected) return; setSelected(choice); if (choice === question.answer) setScore((current) => current + 1); };
@@ -74,7 +99,7 @@ function App() {
   const progress = ((questionIndex + 1) / questions.length) * 100;
 
   const artwork = data.topTracks[0]?.album?.images?.[0]?.url || data.topArtists[0]?.images?.[0]?.url;
-  return <main className="page-shell quiz-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><div className="topbar-actions"><div className="mini-progress"><span>{String(questionIndex + 1).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}</span><i><b style={{ width: `${progress}%` }} /></i></div><ThemeToggle theme={theme} onToggle={() => setTheme(toggleTheme(theme))} /><button className="ghost-button" onClick={signOut}>Sign out</button></div></header><section className="quiz-intro"><div><div className="eyebrow"><span /> A QUIZ ABOUT YOU</div><h1>How well do you know your <em>Spotify,</em> {displayName}?</h1><p>Six questions drawn from your real listening history. No judgement - just vibes.</p><div className="signal-note">o <span>BUILT FROM YOUR LISTENING SIGNAL</span></div></div><ListeningVisual imageUrl={artwork} /></section><section className="quiz-card"><div className="card-glow" /><div className="card-progress"><b style={{ width: `${progress}%` }} /></div><div className="question-meta"><span>QUESTION {String(questionIndex + 1).padStart(2, '0')} <i>/ {String(questions.length).padStart(2, '0')}</i></span><span><em>{score}</em> CORRECT</span></div><div className="question-title"><span className="question-icon">~</span><h2>{question.prompt}</h2></div><div className="answers">{question.choices.map((choice: string, index: number) => { const state = selected ? (choice === question.answer ? 'correct' : choice === selected ? 'wrong' : 'muted') : ''; return <button key={choice} className={`answer-option ${state}`} aria-pressed={selected === choice} aria-disabled={Boolean(selected)} disabled={Boolean(selected)} onClick={() => answer(choice)}><span className="answer-index">{String.fromCharCode(65 + index)}</span><strong>{choice}</strong><span className="answer-state">{state === 'correct' ? 'OK' : state === 'wrong' ? 'X' : '+'}</span></button>; })}</div>{selected && <div className="feedback"><div><span className="feedback-icon">{selected === question.answer ? 'OK' : 'X'}</span><div><strong>{selected === question.answer ? "That's right." : `Not quite - it was ${question.answer}.`}</strong><p>{question.detail}</p></div></div><button ref={nextButtonRef} className="next-button" onClick={next}>{questionIndex + 1 === questions.length ? 'See results' : 'Next question'} <b>-&gt;</b></button></div>}</section><p className="privacy-note">Your quiz uses your Spotify data only for this session. <button onClick={signOut}>Disconnect Spotify</button></p></main>;
+  return <main className="page-shell quiz-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><div className="topbar-actions"><span className="active-theme-pill"><i /> {themeLabel(activeTheme)}</span><button className="change-theme-button" onClick={changeTheme}>Change theme</button><div className="mini-progress"><span>{String(questionIndex + 1).padStart(2, '0')} / {String(questions.length).padStart(2, '0')}</span><i><b style={{ width: `${progress}%` }} /></i></div><ThemeToggle theme={theme} onToggle={() => setTheme(toggleTheme(theme))} /><button className="ghost-button" onClick={signOut}>Sign out</button></div></header><section className="quiz-intro"><div><div className="eyebrow"><span /> A QUIZ ABOUT YOU</div><h1>How well do you know your <em>Spotify,</em> {displayName}?</h1><p>Five questions drawn from your real listening history. No judgement - just vibes.</p><div className="signal-note">o <span>BUILT FROM YOUR LISTENING SIGNAL</span></div></div><ListeningVisual imageUrl={artwork} /></section><section className="quiz-card"><div className="card-glow" /><div className="card-progress"><b style={{ width: `${progress}%` }} /></div><div className="question-meta"><span>QUESTION {String(questionIndex + 1).padStart(2, '0')} <i>/ {String(questions.length).padStart(2, '0')}</i></span><span><em>{score}</em> CORRECT</span></div><div className="question-title"><span className="question-icon">~</span><h2>{question.prompt}</h2></div><div className="answers">{question.choices.map((choice: string, index: number) => { const state = selected ? (choice === question.answer ? 'correct' : choice === selected ? 'wrong' : 'muted') : ''; return <button key={choice} className={`answer-option ${state}`} aria-pressed={selected === choice} aria-disabled={Boolean(selected)} disabled={Boolean(selected)} onClick={() => answer(choice)}><span className="answer-index">{String.fromCharCode(65 + index)}</span><strong>{choice}</strong><span className="answer-state">{state === 'correct' ? 'OK' : state === 'wrong' ? 'X' : '+'}</span></button>; })}</div>{selected && <div className="feedback"><div><span className="feedback-icon">{selected === question.answer ? 'OK' : 'X'}</span><div><strong>{selected === question.answer ? "That's right." : `Not quite - it was ${question.answer}.`}</strong><p>{question.detail}</p></div></div><button ref={nextButtonRef} className="next-button" onClick={next}>{questionIndex + 1 === questions.length ? 'See results' : 'Next question'} <b>-&gt;</b></button></div>}</section><p className="privacy-note">Your quiz uses your Spotify data only for this session. <button onClick={signOut}>Disconnect Spotify</button></p></main>;
 }
 
 export default App;

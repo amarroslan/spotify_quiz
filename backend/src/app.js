@@ -2,7 +2,7 @@ import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { decryptRefreshToken, deleteSession, getAccessToken as readAccessToken, getQuizCache, getSession, getUser, incrementRateLimit, saveAccessToken, saveAttempt, saveQuizCache, saveSession, storageMode, upsertUser } from './storage.js';
+import { decryptRefreshToken, deleteSession, getAccessToken as readAccessToken, getLyricsCache, getQuizCache, getSession, getUser, incrementRateLimit, saveAccessToken, saveAttempt, saveLyricsCache, saveQuizCache, saveSession, storageMode, upsertUser } from './storage.js';
 
 const app = express();
 const frontendUrl = process.env.FRONTEND_URL || 'http://127.0.0.1:5173';
@@ -46,6 +46,27 @@ async function spotifyFetch(path, accessToken, attempt = 0) {
     return spotifyFetch(path, accessToken, attempt + 1);
   }
   throw jsonError(response.status, response.status === 401 ? 'spotify_unauthorized' : response.status === 429 ? 'spotify_rate_limited' : 'spotify_request_failed', detail);
+}
+
+async function lyricsForTrack(track) {
+  const artist = track.artists?.[0]?.name;
+  const title = track.name;
+  if (!artist || !title) return null;
+  const cacheKey = createHash('sha256').update(`${artist}\u0000${title}`).digest('hex');
+  const cached = await getLyricsCache(cacheKey);
+  if (cached && Object.prototype.hasOwnProperty.call(cached, 'lyrics')) return cached.lyrics;
+  try {
+    const endpoint = `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`;
+    const response = await fetchWithTimeout(endpoint);
+    if (response.status === 404) { await saveLyricsCache(cacheKey, { lyrics: null }); return null; }
+    if (!response.ok) return null;
+    const body = await response.json();
+    const lyrics = typeof body.lyrics === 'string' ? body.lyrics.trim().slice(0, 6000) : null;
+    await saveLyricsCache(cacheKey, { lyrics });
+    return lyrics;
+  } catch {
+    return null;
+  }
 }
 
 async function refreshToken(userId, user) {
@@ -106,7 +127,17 @@ app.get('/api/quiz-data', async (req, res, next) => {
     const { token, user } = await accessTokenFor(req);
     const cached = await getQuizCache(user.spotify_user_id);
     if (cached?.payload) return sendWithEtag(req, res, cached.payload, 'HIT');
-    const payload = { profile: await spotifyFetch('/me', token), topArtists: (await spotifyFetch('/me/top/artists?time_range=medium_term&limit=20', token)).items, topTracks: (await spotifyFetch('/me/top/tracks?time_range=medium_term&limit=20', token)).items, recentlyPlayed: (await spotifyFetch('/me/player/recently-played?limit=50', token)).items };
+    const [profile, topArtistsResponse, topTracksResponse, recentlyPlayedResponse] = await Promise.all([
+      spotifyFetch('/me', token),
+      spotifyFetch('/me/top/artists?time_range=medium_term&limit=50', token),
+      spotifyFetch('/me/top/tracks?time_range=medium_term&limit=50', token),
+      spotifyFetch('/me/player/recently-played?limit=50', token),
+    ]);
+    const topArtists = topArtistsResponse.items || [];
+    const topTracks = topTracksResponse.items || [];
+    const lyricPairs = await Promise.all(topTracks.slice(0, 30).map(async (track) => [track.id, await lyricsForTrack(track)]));
+    const lyricsByTrack = Object.fromEntries(lyricPairs.filter(([, lyrics]) => Boolean(lyrics)));
+    const payload = { profile, topArtists, topTracks, recentlyPlayed: recentlyPlayedResponse.items || [], lyricsByTrack };
     await saveQuizCache(user.spotify_user_id, { payload, cachedAt: Date.now() }, 300);
     return sendWithEtag(req, res, payload, 'MISS');
   } catch (error) {
