@@ -4,11 +4,14 @@ import { randomUUID } from 'node:crypto';
 import { decryptSecret, encryptSecret } from './crypto.js';
 
 const memory = new Map();
-const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
-const redis = hasRedis ? Redis.fromEnv() : null;
-const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const hasDatabase = Boolean(process.env.SUPABASE_URL && supabaseKey);
-const supabase = hasDatabase ? createClient(process.env.SUPABASE_URL, supabaseKey, { auth: { persistSession: false } }) : null;
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+const hasRedis = Boolean(redisUrl && redisToken);
+const redis = hasRedis ? new Redis({ url: redisUrl, token: redisToken }) : null;
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const supabaseKey = (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY)?.trim();
+const hasDatabase = Boolean(supabaseUrl && supabaseKey);
+const supabase = hasDatabase ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } }) : null;
 
 const getMemory = (key) => {
   const record = memory.get(key);

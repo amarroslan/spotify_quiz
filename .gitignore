@@ -60,3 +60,6 @@ exports/
 
 # Local scratch workspaces
 .superpowers/sdd/
+
+.vercel
+.env*.local
