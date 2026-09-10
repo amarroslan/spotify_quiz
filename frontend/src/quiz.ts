@@ -3,7 +3,10 @@ import type { QuizData } from './types/spotify';
 
 const shuffle = <T,>(items: T[]): T[] => [...items].sort(() => Math.random() - 0.5);
 const unique = (items: string[]): string[] => [...new Map(items.map((item) => [item, item])).values()];
-const choices = (answer: string, pool: string[]): string[] => shuffle(unique([answer, ...pool]).filter(Boolean)).slice(0, 4);
+const choices = (answer: string, pool: string[]): string[] => {
+  const distractors = shuffle(unique(pool).filter((choice) => Boolean(choice) && choice !== answer)).slice(0, 3);
+  return shuffle([answer, ...distractors]);
+};
 
 export function buildQuestions(data: QuizData): QuizQuestion[] {
   const { profile, topArtists = [], topTracks = [], recentlyPlayed = [] } = data;
