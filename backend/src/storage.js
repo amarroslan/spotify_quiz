@@ -6,8 +6,9 @@ import { decryptSecret, encryptSecret } from './crypto.js';
 const memory = new Map();
 const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 const redis = hasRedis ? Redis.fromEnv() : null;
-const hasDatabase = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-const supabase = hasDatabase ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) : null;
+const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const hasDatabase = Boolean(process.env.SUPABASE_URL && supabaseKey);
+const supabase = hasDatabase ? createClient(process.env.SUPABASE_URL, supabaseKey, { auth: { persistSession: false } }) : null;
 
 const getMemory = (key) => {
   const record = memory.get(key);

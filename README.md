@@ -39,7 +39,7 @@ For Vercel, leave `VITE_API_URL` empty so the browser uses same-origin `/api` ro
 | `FRONTEND_URL` | Allowed browser origin. |
 | `SESSION_SECRET` | Session secret. |
 | `TOKEN_ENCRYPTION_KEY` | Dedicated AES-256-GCM refresh-token encryption secret. |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Server-only Supabase connection. |
+| `SUPABASE_URL` / `SUPABASE_SECRET_KEY` | Server-only Supabase connection. Legacy `SUPABASE_SERVICE_ROLE_KEY` is also supported. |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Server-only Redis connection. |
 | `VITE_API_URL` | Optional local API origin; empty on Vercel. |
 
