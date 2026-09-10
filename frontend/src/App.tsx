@@ -8,6 +8,15 @@ import type { QuizData } from './types/spotify';
 
 const signOut = (): Promise<unknown> => logout().catch(() => null).finally(() => window.location.reload());
 
+const authErrorMessage = (code: string | null): string | null => {
+  if (!code) return null;
+  if (code === 'access_denied') return 'Spotify permission is required to build your quiz. Please choose the Spotify account you want to use.';
+  if (code === 'state_mismatch') return 'Your secure Spotify login session expired. Please start the connection again.';
+  if (code === 'refresh_token_missing') return 'Spotify did not finish connecting this account. Please try again and approve access when Spotify asks.';
+  if (code === 'not_registered') return 'This Spotify account is not registered for the app yet. Add it in Spotify Developer Dashboard, then try again.';
+  return 'Spotify sign-in did not complete. Please try again.';
+};
+
 function Brand() {
   return <div className="brand"><span className="brand-mark"><i /><i /><i /></span><div><span className="brand-kicker">your frequency</span><strong>LISTENING QUIZ</strong></div></div>;
 }
@@ -28,7 +37,7 @@ function ListeningVisual({ imageUrl }: { imageUrl?: string }) {
 }
 
 function Landing({ onLogin, authError, theme, onToggleTheme }: { onLogin: () => void; authError: string | null; theme: Theme; onToggleTheme: () => void }) {
-  return <main className="page-shell landing-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><ThemeToggle theme={theme} onToggle={onToggleTheme} /></header><section className="landing-grid"><div className="landing-copy"><div className="eyebrow"><span /> THE PERSONAL MUSIC QUIZ</div><h1>Your listening history has a lot to <em>say.</em></h1><p>Connect Spotify and find out how well you really know your own soundtrack.</p>{authError && <p className="auth-error" role="alert">Spotify sign-in did not complete. Please try again.</p>}<button className="spotify-button" onClick={onLogin}><span className="button-orb" /> Continue with Spotify <b>-&gt;</b></button><small>Read-only access to your profile, top items, and recently played tracks.</small></div><ListeningVisual /></section></main>;
+  return <main className="page-shell landing-page"><div className="ambient ambient-one" /><div className="ambient ambient-two" /><header className="topbar"><Brand /><ThemeToggle theme={theme} onToggle={onToggleTheme} /></header><section className="landing-grid"><div className="landing-copy"><div className="eyebrow"><span /> THE PERSONAL MUSIC QUIZ</div><h1>Your listening history has a lot to <em>say.</em></h1><p>Connect Spotify and find out how well you really know your own soundtrack.</p>{authError && <p className="auth-error" role="alert">{authErrorMessage(authError)}</p>}<button className="spotify-button" onClick={onLogin}><span className="button-orb" /> Continue with Spotify <b>-&gt;</b></button><small>Read-only access to your profile, top items, and recently played tracks.</small></div><ListeningVisual /></section></main>;
 }
 
 function ScoreRing({ score, total }: { score: number; total: number }) {

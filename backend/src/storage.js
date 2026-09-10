@@ -58,7 +58,21 @@ export async function getLyricsCache(cacheKey) { return getJson(`spotify:lyrics:
 export async function saveLyricsCache(cacheKey, value, ttlSeconds = 86_400) { return setJson(`spotify:lyrics:v1:${cacheKey}`, value, ttlSeconds); }
 
 export async function upsertUser({ spotifyUserId, displayName, avatarUrl, refreshToken }) {
-  const refreshTokenCiphertext = await encryptSecret(refreshToken);
+  let existing = null;
+  if (!refreshToken) {
+    if (!supabase) {
+      const id = memory.get(`user-id:${spotifyUserId}`)?.value;
+      existing = id ? memory.get(`user:${id}`)?.value : null;
+    } else {
+      const result = await supabase.from('users').select('id,refresh_token_ciphertext').eq('spotify_user_id', spotifyUserId).maybeSingle();
+      if (result.error) throw result.error;
+      existing = result.data;
+    }
+    if (!existing?.refresh_token_ciphertext) {
+      throw Object.assign(new Error('Spotify did not return a refresh token for this authorization.'), { code: 'refresh_token_missing' });
+    }
+  }
+  const refreshTokenCiphertext = refreshToken ? await encryptSecret(refreshToken) : existing.refresh_token_ciphertext;
   if (!supabase) {
     const id = memory.get(`user-id:${spotifyUserId}`)?.value || randomUUID();
     memory.set(`user-id:${spotifyUserId}`, { value: id });

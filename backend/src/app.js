@@ -31,6 +31,11 @@ const requireConfig = () => { if (!process.env.SPOTIFY_CLIENT_ID || !process.env
 const spotifyTokenAuth = () => `Basic ${Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')}`;
 const jsonError = (status, error, detail) => Object.assign(new Error(error), { status, code: error, detail });
 
+export function buildSpotifyAuthorizeUrl({ clientId, redirectUri: callbackUri, state, scope }) {
+  const params = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: callbackUri, state, scope, show_dialog: 'true' });
+  return `https://accounts.spotify.com/authorize?${params}`;
+}
+
 async function fetchWithTimeout(url, options = {}) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(8000) });
   return response;
@@ -95,7 +100,7 @@ async function rateLimit(req, bucket, limit) {
   if (count > limit) throw jsonError(429, 'rate_limited');
 }
 
-app.get('/api/auth/login', async (req, res, next) => { try { requireConfig(); await rateLimit(req, 'login', 10); req.userSession.oauthState = randomUUID(); await saveSession(req.sessionId, req.userSession); const params = new URLSearchParams({ client_id: process.env.SPOTIFY_CLIENT_ID, response_type: 'code', redirect_uri: redirectUri, state: req.userSession.oauthState, scope: scopes }); res.redirect(`https://accounts.spotify.com/authorize?${params}`); } catch (error) { next(error); } });
+app.get('/api/auth/login', async (req, res, next) => { try { requireConfig(); await rateLimit(req, 'login', 10); req.userSession.oauthState = randomUUID(); await saveSession(req.sessionId, req.userSession); res.redirect(buildSpotifyAuthorizeUrl({ clientId: process.env.SPOTIFY_CLIENT_ID, redirectUri, state: req.userSession.oauthState, scope: scopes })); } catch (error) { next(error); } });
 
 app.get('/api/auth/callback', async (req, res) => {
   const { code, state, error } = req.query;
@@ -105,7 +110,10 @@ app.get('/api/auth/callback', async (req, res) => {
     requireConfig();
     const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
     const tokenResponse = await fetchWithTimeout('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: spotifyTokenAuth() }, body });
-    if (!tokenResponse.ok) throw new Error('Token exchange failed');
+    if (!tokenResponse.ok) {
+      const detail = (await tokenResponse.text()).slice(0, 300);
+      throw jsonError(401, 'spotify_token_exchange_failed', detail);
+    }
     const tokens = await tokenResponse.json();
     const profile = await spotifyFetch('/me', tokens.access_token);
     const user = await upsertUser({ spotifyUserId: profile.id, displayName: profile.display_name, avatarUrl: profile.images?.[0]?.url || null, refreshToken: tokens.refresh_token });
@@ -114,7 +122,11 @@ app.get('/api/auth/callback', async (req, res) => {
     req.userSession = { userId: user.id, spotifyUserId: profile.id };
     await saveSession(req.sessionId, req.userSession);
     res.redirect(`${frontendUrl}/?auth=success`);
-  } catch (callbackError) { console.error(callbackError.code || callbackError.message); res.redirect(`${frontendUrl}/?auth_error=token_exchange_failed`); }
+  } catch (callbackError) {
+    console.error(callbackError.code || callbackError.message);
+    const authError = callbackError.code === 'refresh_token_missing' ? 'refresh_token_missing' : callbackError.code === 'spotify_token_exchange_failed' && /not registered|user not registered/i.test(callbackError.detail || '') ? 'not_registered' : 'token_exchange_failed';
+    res.redirect(`${frontendUrl}/?auth_error=${encodeURIComponent(authError)}`);
+  }
 });
 
 app.post('/api/auth/logout', async (req, res, next) => { try { await deleteSession(req.sessionId); res.setHeader('Set-Cookie', `${sessionCookie}=; ${cookieOptions()}; Max-Age=0`); res.status(204).end(); } catch (error) { next(error); } });
